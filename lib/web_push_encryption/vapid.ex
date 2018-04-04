@@ -7,19 +7,24 @@ defmodule WebPushEncryption.Vapid do
 
     vapid = vapid || Application.fetch_env!(:web_push_encryption, :vapid_details)
 
-    # public_key = Base.url_decode64!(vapid[:public_key], padding: false)
+    public_key = Base.url_decode64!(vapid[:public_key], padding: false)
     private_key = Base.url_decode64!(vapid[:private_key], padding: false)
-    byte_size(private_key)
-    |> IO.inspect(label: "ss")
 
     payload = %{
       aud: audience,
       exp: expiration_timestamp,
       sub: vapid[:subject]
     }
-    options = %{key: private_key, alg: "ES256"}
-    jwt = JsonWebToken.sign(payload, options)
+    |> JOSE.JWT.from_map()
 
+    jwk = {:ECPrivateKey,
+           1,
+           private_key,
+           {:namedCurve, {1, 2, 840, 10045, 3, 1, 7}},
+           public_key}
+           |> JOSE.JWK.from_key()
+
+    {_, jwt} = JOSE.JWS.compact(JOSE.JWT.sign(jwk, %{"alg" => "ES256"}, payload))
     headers(content_encoding, jwt, vapid[:public_key])
   end
 
